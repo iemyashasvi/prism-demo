@@ -51,7 +51,9 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`  http://localhost:${PORT}/prism/adyen      - Prism + Adyen`);
   console.log('\nAPI:');
   console.log('  POST /api/normal/stripe/session');
-  console.log('  POST /api/normal/adyen/session');
+  console.log('  POST /api/normal/stripe/authorize');
+  console.log('  POST /api/normal/adyen/payment-methods');
+  console.log('  POST /api/normal/adyen/authorize');
   console.log('  POST /api/prism/:connector/sdk-session    (stripe | adyen)');
   console.log('  POST /api/prism/:connector/authorize      (stripe | adyen)');
 });

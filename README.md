@@ -100,15 +100,27 @@ Adding a 3rd connector via prism: one line in the `connectors` map.
 - **`creds.json` Stripe key may be expired.** If `/api/normal/stripe/intent` returns `api_key_expired`, set `STRIPE_API_KEY` in `.env` directly — the loader uses `.env` when present and only falls back to `creds.json`.
 - **`ADYEN_CLIENT_KEY` is not in `creds.json`** — it must be fetched from the Adyen Customer Area separately and put in `.env`.
 
+## Flow
+
+All four flows use the same two-step shape: **server creates a session/intent → client tokenises the card → server authorises with the token.**
+
+| Step | Normal Stripe | Normal Adyen | Prism (any connector) |
+|------|---------------|--------------|------------------------|
+| 1. Session | `POST /api/normal/stripe/session` → `/v1/payment_intents` | `POST /api/normal/adyen/payment-methods` → `/v71/paymentMethods` | `POST /api/prism/:c/sdk-session` |
+| 2. Tokenise (browser) | `stripe.createPaymentMethod()` → `pm_xxx` | Adyen Web SDK → encrypted card blob | connector-native SDK |
+| 3. Authorize | `POST /api/normal/stripe/authorize` → `/v1/payment_intents/:id/confirm` | `POST /api/normal/adyen/authorize` → `/v71/payments` | `POST /api/prism/:c/authorize` → `tokenAuthorize` |
+
+The split is identical; the **wire shape of step 3 is what diverges**: Stripe wants form-encoded `payment_method=pm_xxx` against `/payment_intents/:id/confirm`; Adyen wants a 30-field JSON document with the encrypted card blob against `/payments`. Prism gives you one canonical `PaymentServiceTokenAuthorizeRequest` that maps onto both.
+
 ## Smoke test (without test cards)
 
 Quickly verify wiring with the server running:
 ```sh
 curl -s http://localhost:3000/health
-curl -s -X POST http://localhost:3000/api/normal/stripe/intent  -H 'Content-Type: application/json' -d '{"amount":1000,"currency":"usd"}'
-curl -s -X POST http://localhost:3000/api/normal/adyen/session  -H 'Content-Type: application/json' -d '{"amount":1000,"currency":"USD"}'
-curl -s -X POST http://localhost:3000/api/prism/stripe/sdk-session -H 'Content-Type: application/json' -d '{"amount":1000,"currency":"USD"}'
-curl -s -X POST http://localhost:3000/api/prism/adyen/sdk-session  -H 'Content-Type: application/json' -d '{"amount":1000,"currency":"USD"}'
+curl -s -X POST http://localhost:3000/api/normal/stripe/session         -H 'Content-Type: application/json' -d '{"amount":1000,"currency":"usd"}'
+curl -s -X POST http://localhost:3000/api/normal/adyen/payment-methods  -H 'Content-Type: application/json' -d '{"amount":1000,"currency":"USD"}'
+curl -s -X POST http://localhost:3000/api/prism/stripe/sdk-session      -H 'Content-Type: application/json' -d '{"amount":1000,"currency":"USD"}'
+curl -s -X POST http://localhost:3000/api/prism/adyen/sdk-session       -H 'Content-Type: application/json' -d '{"amount":1000,"currency":"USD"}'
 ```
 
 ## Out of scope

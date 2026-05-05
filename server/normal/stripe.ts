@@ -4,13 +4,16 @@ import { v4 as uuidv4 } from 'uuid';
 const router = Router();
 
 // ─────────────────────────────────────────────────────────────────────────
-// Direct Stripe integration — POST /v1/payment_intents
+// Direct Stripe integration — two-step flow that mirrors prism:
+//
+//   1. POST /session    → POST  api.stripe.com/v1/payment_intents
+//   2. POST /authorize  → POST  api.stripe.com/v1/payment_intents/:id/confirm
 //
 //   Auth:         Authorization: Bearer sk_test_...
 //   Content-Type: application/x-www-form-urlencoded   (NOT JSON)
 //   Encoding:     bracket-notation for ANY nested data
 //   Naming:       snake_case
-//   Response:     snake_case JSON  (client_secret, payment_method, etc.)
+//   Response:     snake_case JSON  (client_secret, payment_method, …)
 //
 // Stripe's PaymentIntents has 50+ optional parameters. Real merchants set
 // receipt copy, statement descriptors, 3DS preferences, shipping, line-
@@ -113,10 +116,74 @@ router.post('/session', async (req, res) => {
 
     res.json({
       clientSecret: data.client_secret,
+      paymentIntentId: data.id,
       publishableKey: process.env.STRIPE_PUBLISHABLE_KEY || ''
     });
   } catch (e) {
     console.error('[normal/stripe/session]', e);
+    const message = e instanceof Error ? e.message : 'Unknown error';
+    res.status(500).json({ error: 'NetworkError', message });
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// /authorize — server-side confirm with the tokenised payment method.
+//
+//   POST  /v1/payment_intents/{id}/confirm
+//
+// The client tokenised the card via stripe.createPaymentMethod() and sent
+// us back `pm_xxx`. We attach it to the intent and confirm. Compare with
+// server/prism/checkout.ts → tokenAuthorize: same idea, but here the
+// connector-specific shape (form-encoded `payment_method=…`, snake_case
+// nested keys, the `return_url` requirement, the `next_action` response)
+// is all Stripe-specific.
+// ─────────────────────────────────────────────────────────────────────────
+router.post('/authorize', async (req, res) => {
+  try {
+    const { paymentIntentId, paymentMethodId } = req.body;
+    if (!paymentIntentId || !paymentMethodId) {
+      return res.status(400).json({ error: 'BadRequest', message: 'paymentIntentId and paymentMethodId are required' });
+    }
+
+    const payload = {
+      payment_method: paymentMethodId,
+      return_url: `${process.env.BASE_URL || 'http://localhost:3000'}/normal/stripe`
+    };
+
+    const r = await fetch(
+      `https://api.stripe.com/v1/payment_intents/${encodeURIComponent(paymentIntentId)}/confirm`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env.STRIPE_API_KEY}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+          'Stripe-Version': '2024-06-20',
+          'Idempotency-Key': uuidv4()
+        },
+        body: toFormBody(payload)
+      }
+    );
+
+    const data: any = await r.json();
+    if (!r.ok) {
+      console.error('[normal/stripe/authorize]', data);
+      return res.status(r.status).json({
+        error: 'StripeError',
+        code: data.error?.code,
+        type: data.error?.type,
+        message: data.error?.message || `HTTP ${r.status}`
+      });
+    }
+
+    res.json({
+      id: data.id,
+      status: data.status,
+      amount: data.amount,
+      currency: data.currency,
+      nextAction: data.next_action || null
+    });
+  } catch (e) {
+    console.error('[normal/stripe/authorize]', e);
     const message = e instanceof Error ? e.message : 'Unknown error';
     res.status(500).json({ error: 'NetworkError', message });
   }

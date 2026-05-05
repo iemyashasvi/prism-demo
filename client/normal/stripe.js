@@ -1,7 +1,7 @@
 const AMOUNT = 1000;
 const CURRENCY = 'usd';
 
-let stripe, elements;
+let stripe, elements, paymentIntentId;
 const statusEl = document.getElementById('status');
 const errEl = document.getElementById('error-msg');
 const payBtn = document.getElementById('pay-btn');
@@ -18,11 +18,18 @@ function showStatus(kind, html) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount: AMOUNT, currency: CURRENCY })
     });
-    const { clientSecret, publishableKey, message } = await r.json();
+    const { clientSecret, paymentIntentId: pid, publishableKey, message } = await r.json();
     if (!clientSecret) throw new Error(message || 'Failed to create PaymentIntent');
+    paymentIntentId = pid;
 
     stripe = Stripe(publishableKey);
-    elements = stripe.elements({ clientSecret, appearance: { theme: 'stripe' } });
+    // Manual creation: we tokenize on the client, hand the token to the server,
+    // and the server confirms the intent with /v1/payment_intents/:id/confirm.
+    elements = stripe.elements({
+      clientSecret,
+      paymentMethodCreation: 'manual',
+      appearance: { theme: 'stripe' }
+    });
     elements.create('payment', { layout: 'tabs' }).mount('#payment-element');
 
     payBtn.disabled = false;
@@ -37,23 +44,42 @@ payBtn.addEventListener('click', async () => {
   payBtn.textContent = 'Processing…';
   errEl.textContent = '';
 
-  // Direct flow: Stripe.js confirms the PaymentIntent against Stripe directly.
-  const { error, paymentIntent } = await stripe.confirmPayment({
-    elements,
-    confirmParams: { return_url: window.location.href },
-    redirect: 'if_required'
-  });
-
-  if (error) {
-    errEl.textContent = error.message;
-    payBtn.disabled = false;
-    payBtn.textContent = 'Pay $10.00';
-    showStatus('err', `<strong>Failed</strong><pre>${error.message}</pre>`);
+  const { error: submitErr } = await elements.submit();
+  if (submitErr) {
+    errEl.textContent = submitErr.message;
+    payBtn.disabled = false; payBtn.textContent = 'Pay $10.00';
     return;
   }
 
-  showStatus('ok',
-    `<strong>${paymentIntent.status.toUpperCase()}</strong>` +
-    `<pre>id: ${paymentIntent.id}\nstatus: ${paymentIntent.status}\namount: ${paymentIntent.amount} ${paymentIntent.currency}</pre>`);
-  payBtn.textContent = 'Done';
+  const { paymentMethod, error: pmErr } = await stripe.createPaymentMethod({ elements });
+  if (pmErr) {
+    errEl.textContent = pmErr.message;
+    payBtn.disabled = false; payBtn.textContent = 'Pay $10.00';
+    return;
+  }
+
+  // Hand the tokenised PM to the server — server confirms the intent.
+  const r = await fetch('/api/normal/stripe/authorize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      paymentIntentId,
+      paymentMethodId: paymentMethod.id
+    })
+  });
+  const result = await r.json();
+
+  if (result.error) {
+    errEl.textContent = result.message || result.error;
+    payBtn.disabled = false; payBtn.textContent = 'Pay $10.00';
+    showStatus('err', `<strong>Failed</strong><pre>${result.message || result.error}</pre>`);
+    return;
+  }
+
+  const ok = result.status === 'succeeded' || result.status === 'requires_capture';
+  showStatus(ok ? 'ok' : 'err',
+    `<strong>${(result.status || 'ERROR').toUpperCase()}</strong>` +
+    `<pre>id: ${result.id}\nstatus: ${result.status}\namount: ${result.amount} ${result.currency}</pre>`);
+  payBtn.textContent = ok ? 'Done' : 'Pay $10.00';
+  if (!ok) payBtn.disabled = false;
 });
