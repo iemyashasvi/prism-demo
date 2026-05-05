@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stripe — Direct Integration</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://js.stripe.com/v3/"></script>
+</head>
+<body>
+  <div class="checkout">
+    <header>
+      <a href="/">← all demos</a>
+      <span class="badge badge-normal">Direct</span>
+    </header>
+
+    <div class="card-panel">
+      <h2>Stripe — Direct Integration</h2>
+      <p class="sub">Server hits <code>api.stripe.com/v1/payment_intents</code> directly (no SDK), form-encoded, Bearer auth. See <code>server/normal/stripe.ts</code>.</p>
+
+      <div class="summary">
+        <span class="label">Amount</span>
+        <span class="val">$10.00 USD</span>
+      </div>
+
+      <div class="test-card">
+        <strong>Test card:</strong> 4242 4242 4242 4242 &middot; any future expiry &middot; any CVC
+      </div>
+
+      <div id="payment-element"></div>
+      <div id="error-msg" class="error-msg"></div>
+      <button id="pay-btn" class="pay-btn" disabled>Loading…</button>
+
+      <div id="status" class="status"></div>
+    </div>
+  </div>
+
+  <script src="/normal/stripe.js"></script>
+</body>
+</html>

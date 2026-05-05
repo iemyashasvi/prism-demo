@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adyen — Direct Integration</title>
+  <link rel="stylesheet" href="/styles.css">
+  <script src="https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/6.31.1/adyen.js" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://checkoutshopper-test.adyen.com/checkoutshopper/sdk/6.31.1/adyen.css" crossorigin="anonymous">
+</head>
+<body>
+  <div class="checkout">
+    <header>
+      <a href="/">← all demos</a>
+      <span class="badge badge-normal">Direct</span>
+    </header>
+
+    <div class="card-panel">
+      <h2>Adyen — Direct Integration</h2>
+      <p class="sub">Server hits <code>checkout-test.adyen.com/v71/sessions</code> directly (no SDK), JSON, <code>x-API-key</code> auth. See <code>server/normal/adyen.ts</code>.</p>
+
+      <div class="summary">
+        <span class="label">Amount</span>
+        <span class="val">$10.00 USD</span>
+      </div>
+
+      <div class="test-card">
+        <strong>Test card:</strong> 4111 1111 4555 1142 &middot; 03/30 &middot; CVC 737
+      </div>
+
+      <div id="adyen-card-container"></div>
+      <div id="error-msg" class="error-msg"></div>
+
+      <div id="status" class="status"></div>
+    </div>
+  </div>
+
+  <script src="/normal/adyen.js"></script>
+</body>
+</html>

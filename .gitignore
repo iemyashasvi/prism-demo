@@ -1,0 +1,6 @@
+node_modules
+dist
+.env
+creds.json
+*.log
+.DS_Store

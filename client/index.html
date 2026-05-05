@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prism vs Direct — Integration Demo</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="landing">
+    <h1>Prism vs Direct Integration</h1>
+    <p class="lede">
+      Same payment flow (client-authentication tokenization), same processors, same browser SDK.
+      The only thing that changes between the two columns below is the server code.
+      Open both columns side-by-side and compare.
+    </p>
+
+    <div class="grid">
+      <section class="col col-normal">
+        <h2>Direct integration</h2>
+        <p class="sub">Raw HTTP per Stripe/Adyen API docs — no SDK. Different hosts, different auth headers, different content types, different error shapes.</p>
+        <ul>
+          <li><a href="/normal/stripe">Stripe — direct</a> <span class="path">server/normal/stripe.ts</span></li>
+          <li><a href="/normal/adyen">Adyen — direct</a> <span class="path">server/normal/adyen.ts</span></li>
+        </ul>
+      </section>
+
+      <section class="col col-prism">
+        <h2>Prism integration</h2>
+        <p class="sub">Uses <code>hyperswitch-prism</code>. One SDK, one shape, swap a config to swap connectors.</p>
+        <ul>
+          <li><a href="/prism/stripe">Stripe — via prism</a> <span class="path">server/prism/stripe.ts</span></li>
+          <li><a href="/prism/adyen">Adyen — via prism</a> <span class="path">server/prism/adyen.ts</span></li>
+        </ul>
+      </section>
+    </div>
+
+    <section class="howto">
+      <h3>What to look at</h3>
+      <ol>
+        <li>Open all four pages and run a test payment on each (test cards listed on each page).</li>
+        <li>Then read the four server modules side-by-side. The two prism modules differ by one import; the two direct modules look nothing alike.</li>
+        <li>Run <code>wc -l server/normal/*.ts server/prism/*.ts</code> for the headline.</li>
+      </ol>
+    </section>
+  </main>
+</body>
+</html>
