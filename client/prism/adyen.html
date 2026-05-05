@@ -17,7 +17,7 @@
 
     <div class="card-panel">
       <h2>Adyen — via Prism</h2>
-      <p class="sub">Server uses <code>hyperswitch-prism</code>. <code>POST /api/prism/adyen/sdk-session</code> returns the same shape as the direct integration.</p>
+      <p class="sub">Server uses <code>hyperswitch-prism</code>. Same <code>payload</code> as the Stripe page; only the connector config differs. See <code>server/prism/checkout.ts</code>.</p>
 
       <div class="summary">
         <span class="label">Amount</span>

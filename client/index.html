@@ -10,27 +10,38 @@
   <main class="landing">
     <h1>Prism vs Direct Integration</h1>
     <p class="lede">
-      Same payment flow (client-authentication tokenization), same processors, same browser SDK.
-      The only thing that changes between the two columns below is the server code.
-      Open both columns side-by-side and compare.
+      Same payment flow, same processors, same browser SDK. Only the server differs.
+      Open the two server files side-by-side — that's the entire demo.
     </p>
 
     <div class="grid">
       <section class="col col-normal">
         <h2>Direct integration</h2>
-        <p class="sub">Raw HTTP per Stripe/Adyen API docs — no SDK. Different hosts, different auth headers, different content types, different error shapes.</p>
+        <p class="sub"><code>server/normal/stripe.ts</code> + <code>server/normal/adyen.ts</code></p>
+        <p class="sub-strong">Every connector is its own file.</p>
+        <ul class="bullets">
+          <li>Stripe → form-urlencoded body, <code>Bearer</code> auth, snake_case response</li>
+          <li>Adyen → JSON body, <code>x-API-key</code> header, camelCase response, requires merchantAccount</li>
+          <li>Adding a third connector = writing a third file from scratch</li>
+        </ul>
         <ul>
-          <li><a href="/normal/stripe">Stripe — direct</a> <span class="path">server/normal/stripe.ts</span></li>
-          <li><a href="/normal/adyen">Adyen — direct</a> <span class="path">server/normal/adyen.ts</span></li>
+          <li><a href="/normal/stripe">Stripe — direct</a></li>
+          <li><a href="/normal/adyen">Adyen — direct</a></li>
         </ul>
       </section>
 
       <section class="col col-prism">
         <h2>Prism integration</h2>
-        <p class="sub">Uses <code>hyperswitch-prism</code>. One SDK, one shape, swap a config to swap connectors.</p>
+        <p class="sub"><code>server/prism/checkout.ts</code></p>
+        <p class="sub-strong">One payload, every connector.</p>
+        <ul class="bullets">
+          <li>Single <code>let payload = {…}</code> reused for every connector</li>
+          <li>Swap a connector by adding one line to the <code>connectors</code> map</li>
+          <li>Same shape across the 80+ connectors prism ships with</li>
+        </ul>
         <ul>
-          <li><a href="/prism/stripe">Stripe — via prism</a> <span class="path">server/prism/stripe.ts</span></li>
-          <li><a href="/prism/adyen">Adyen — via prism</a> <span class="path">server/prism/adyen.ts</span></li>
+          <li><a href="/prism/stripe">Stripe — via prism</a></li>
+          <li><a href="/prism/adyen">Adyen — via prism</a></li>
         </ul>
       </section>
     </div>
@@ -38,9 +49,10 @@
     <section class="howto">
       <h3>What to look at</h3>
       <ol>
-        <li>Open all four pages and run a test payment on each (test cards listed on each page).</li>
-        <li>Then read the four server modules side-by-side. The two prism modules differ by one import; the two direct modules look nothing alike.</li>
-        <li>Run <code>wc -l server/normal/*.ts server/prism/*.ts</code> for the headline.</li>
+        <li>Open all four pages and run a test payment.</li>
+        <li>Then open <code>server/normal/stripe.ts</code>, <code>server/normal/adyen.ts</code>, and <code>server/prism/checkout.ts</code> side-by-side.
+          Look for the single <code>payload</code> in the one prism file vs the two separate normal files.</li>
+        <li>In the prism file, imagine adding <code>paypal: paypalConfig</code> to the <code>connectors</code> map. That's the entire diff.</li>
       </ol>
     </section>
   </main>

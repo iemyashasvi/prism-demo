@@ -8,19 +8,26 @@ Same flow, same processors, same browser SDK — only the server differs. Read t
 
 ```
 server/
-  normal/{stripe,adyen}.ts   # direct: raw HTTP per Stripe/Adyen API docs (no SDK)
-  prism/{stripe,adyen}.ts    # via `hyperswitch-prism`
+  normal/stripe.ts     # one file per connector. Different host / auth header /
+  normal/adyen.ts      #   content type / body shape / response. Adding a third
+                       #   connector means writing a third file from scratch.
+  prism/checkout.ts    # one file. One `connectors` map. ONE shared `let payload`
+                       #   reused for every connector. Add a connector by adding
+                       #   one line to the map.
 client/
-  normal/{stripe,adyen}.{html,js}
-  prism/{stripe,adyen}.{html,js}   # client SDK code is identical to its `normal/` twin
+  normal/{stripe,adyen}.{html,js}   # 4 pages, same browser SDKs as the prism pages
+  prism/{stripe,adyen}.{html,js}
 ```
 
-The `normal/` modules deliberately use raw `fetch()` against the official REST endpoints
-(`api.stripe.com/v1/payment_intents`, `checkout-test.adyen.com/v71/sessions`) rather than the
-official npm SDKs. Using `stripe` and `@adyen/api-library` would hide the integration friction
-prism is meant to solve — auth headers, content-type quirks (form-urlencoded vs JSON), error
-shapes, version pinning, host selection (test vs live URL prefix). The raw-HTTP version is what
-you'd actually write the first time you read either company's docs.
+The structural contrast is the demo's whole point — open the two files side-by-side.
+The `normal/checkout.ts` body grows linearly with the number of connectors you support.
+The `prism/checkout.ts` body stays exactly the same; you only edit the `connectors` map.
+
+The direct adapters use raw `fetch()` against the official REST endpoints rather than
+official npm SDKs (`stripe`, `@adyen/api-library`). The SDKs would hide the very friction
+prism is meant to solve — auth headers, content-type quirks, error shapes, version pinning,
+host selection. The raw-HTTP version is what you'd actually write the first time you read
+either company's docs.
 
 ## Setup
 
@@ -62,13 +69,19 @@ you'd actually write the first time you read either company's docs.
 
 ## What to compare
 
-Run all four flows, then:
+Run all four flows, then read the three files side-by-side:
 
 ```sh
-wc -l server/normal/*.ts server/prism/*.ts
+wc -l server/normal/stripe.ts server/normal/adyen.ts server/prism/checkout.ts
+# 101  server/normal/stripe.ts   — form-urlencoded brackets, 25+ fields
+# 139  server/normal/adyen.ts    — nested JSON, 30+ fields, totally different shape
+# 154  server/prism/checkout.ts  — ONE shared `let payload = {…}` covers BOTH connectors
 ```
 
-Then read each pair side-by-side. The two `prism/` modules differ only in which `ConnectorConfig` they import; the two `normal/` modules use entirely different SDKs with no shared shape.
+The two normal files share **zero** field names (Stripe: `metadata[customer_tier]`, Adyen: `additionalData.authorisationType`; Stripe: `shipping[address][line1]`, Adyen: `billingAddress.street + houseNumberOrName`). The prism file uses one canonical shape for `customer`, `address`, `metadata`, etc.
+
+Adding a 3rd connector via direct: write a 3rd file ~100 lines.
+Adding a 3rd connector via prism: one line in the `connectors` map.
 
 ## Verifying payments
 

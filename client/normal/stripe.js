@@ -13,7 +13,7 @@ function showStatus(kind, html) {
 
 (async function init() {
   try {
-    const r = await fetch('/api/normal/stripe/intent', {
+    const r = await fetch('/api/normal/stripe/session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ amount: AMOUNT, currency: CURRENCY })

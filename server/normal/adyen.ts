@@ -3,44 +3,115 @@ import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 
-// Adyen Checkout API: https://docs.adyen.com/api-explorer/Checkout/71/post/sessions
-// No SDK — raw fetch matches what you'd write following the docs.
-// Note: production uses a merchant-specific URL prefix (LIVE_URL_PREFIX).
-//   https://{LIVE_URL_PREFIX}-checkout-live.adyenpayments.com/checkout/v71
-// Test uses the static host below.
-const ADYEN_TEST_API = 'https://checkout-test.adyen.com/v71';
+// ─────────────────────────────────────────────────────────────────────────
+// Direct Adyen integration — POST /v71/sessions
+//
+//   Auth:         x-API-key: AQE...                  (NOT Bearer)
+//   Content-Type: application/json                    (NOT form-encoded)
+//   Encoding:     deeply nested objects + arrays
+//   Naming:       camelCase                           (NOT snake_case)
+//   Required:     merchantAccount, returnUrl, countryCode (none of these
+//                 exist in Stripe's request)
+//   Response:     camelCase JSON  (id, sessionData)   completely different
+//                 shape from Stripe's clientSecret
+//   Live host:    a per-merchant LIVE_URL_PREFIX, NOT the test host
+//
+// Adyen's Sessions API has 60+ optional fields. A production merchant
+// sets shopper profile, locale, channel, billing + delivery addresses,
+// line items, application fingerprint, recurring-processing model, risk
+// data, store-token policy, additionalData freeform map… nothing here
+// shares a name OR a shape with Stripe's request.
+// ─────────────────────────────────────────────────────────────────────────
 
 router.post('/session', async (req, res) => {
   try {
     const { amount, currency = 'USD' } = req.body;
     const reference = `order_${uuidv4().slice(0, 12)}`;
-    const upperCurrency = String(currency).toUpperCase();
+    const upper = String(currency).toUpperCase();
 
-    const sessionRequest = {
+    const payload = {
+      // ── Required ─────────────────────────────────────────────────────
       merchantAccount: process.env.ADYEN_MERCHANT_ACCOUNT,
-      amount: { currency: upperCurrency, value: Number(amount) },
+      amount: { currency: upper, value: Number(amount) },
       reference,
-      returnUrl: `${process.env.BASE_URL || 'http://localhost:3000'}/normal/adyen?ref=${reference}`,
-      countryCode: upperCurrency === 'EUR' ? 'NL' : 'US'
+      returnUrl: `${process.env.BASE_URL || 'http://localhost:3001'}/normal/adyen?ref=${reference}`,
+      countryCode: upper === 'EUR' ? 'NL' : 'US',
+
+      // ── Shopper profile ─────────────────────────────────────────────
+      shopperReference: 'shopper_demo_001',
+      shopperEmail: 'customer@example.com',
+      shopperName: { firstName: 'Jane', lastName: 'Doe' },
+      shopperLocale: 'en-US',
+      shopperIP: '127.0.0.1',
+      telephoneNumber: '+15550123',
+      channel: 'Web',
+
+      // ── Billing address (nested object — compare with Stripe's
+      //    bracket-notation form fields above) ─────────────────────────
+      billingAddress: {
+        street: 'Market Street',
+        houseNumberOrName: '123',
+        city: 'San Francisco',
+        stateOrProvince: 'CA',
+        postalCode: '94105',
+        country: 'US'
+      },
+      deliveryAddress: {
+        street: 'Market Street',
+        houseNumberOrName: '123',
+        city: 'San Francisco',
+        stateOrProvince: 'CA',
+        postalCode: '94105',
+        country: 'US'
+      },
+
+      // ── Order line items (array of objects — Stripe's PaymentIntents
+      //    has no equivalent on this endpoint) ─────────────────────────
+      lineItems: [
+        {
+          id: 'WIDGET-PREMIUM-XL',
+          description: 'Premium Widget XL',
+          amountIncludingTax: Number(amount),
+          quantity: 1,
+          taxPercentage: 0
+        }
+      ],
+
+      // ── Tokenization (storing the card on file requires its own
+      //    risk-profile setup — keeping this off in the demo) ──────────
+      storePaymentMethod: false,
+
+      // ── Platform fingerprint (used by Adyen support / analytics) ────
+      applicationInfo: {
+        merchantApplication: { name: 'demo-prism', version: '1.0.0' }
+      },
+
+      // (Many other fields exist — `mcc`, `additionalData.authorisationType`,
+      //  `riskData`, `shopperStatement`, `recurringProcessingModel`, … —
+      //  but each requires specific account-level configuration in Adyen
+      //  Customer Area. That's another flavour of the friction prism
+      //  hides: every field has its own enablement story per merchant.)
     };
 
-    const resp = await fetch(`${ADYEN_TEST_API}/sessions`, {
+    const r = await fetch('https://checkout-test.adyen.com/v71/sessions', {
       method: 'POST',
       headers: {
         'x-API-key': process.env.ADYEN_API_KEY!,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Idempotency-Key': uuidv4()
       },
-      body: JSON.stringify(sessionRequest)
+      body: JSON.stringify(payload)
     });
 
-    const data = await resp.json() as any;
-
-    if (!resp.ok) {
+    const data: any = await r.json();
+    if (!r.ok) {
       console.error('[normal/adyen/session]', data);
-      return res.status(resp.status).json({
+      return res.status(r.status).json({
         error: 'AdyenError',
         code: data.errorCode,
-        message: data.message || `HTTP ${resp.status}`
+        type: data.errorType,
+        message: data.message || `HTTP ${r.status}`,
+        pspReference: data.pspReference
       });
     }
 
@@ -49,9 +120,9 @@ router.post('/session', async (req, res) => {
       sessionData: data.sessionData,
       clientKey: process.env.ADYEN_CLIENT_KEY || ''
     });
-  } catch (error) {
-    console.error('[normal/adyen/session]', error);
-    const message = error instanceof Error ? error.message : 'Unknown error';
+  } catch (e) {
+    console.error('[normal/adyen/session]', e);
+    const message = e instanceof Error ? e.message : 'Unknown error';
     res.status(500).json({ error: 'NetworkError', message });
   }
 });
